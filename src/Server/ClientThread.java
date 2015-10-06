@@ -12,6 +12,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import Value.NetState;
 import Value.UnitValue;
 import DBHelper.DBManager;
 import DBHelper.MyCard;
@@ -59,7 +60,7 @@ public class ClientThread extends Thread {
 	public int m_single_mapnumber = 0;
 	public String m_Singlemap;
 	public String m_ClientSettingMap;
-	private int state = 0;
+	private int state = NetState.LOGIN;
 	public int team = 0;
 	private boolean game_start = false;
 
@@ -112,8 +113,8 @@ public class ClientThread extends Thread {
 			other.team = 2;
 			// other.joinother(this);
 
-			this.state = 4;
-			other.state = 4;
+			this.state = NetState.MUTI_TRUN_READY;
+			other.state = NetState.MUTI_TRUN_READY;
 
 		}
 	}
@@ -166,12 +167,10 @@ public class ClientThread extends Thread {
 	public synchronized void ListrenReady() throws IOException,
 			InterruptedException, ClassNotFoundException {
 
-		switch (state) {
-		case 0: // 서버에 접속하고 로그인 하기 위해 대기 해주는 상태이다.
-
-			break;
-		case 1:
-
+		
+		switch(state)
+		{
+		case NetState.LOADING:
 			String a = ois.readObject().toString();
 			if (a.equals("uid_request")) {
 				System.out.println("리퀘스트 요청 승인");
@@ -184,11 +183,35 @@ public class ClientThread extends Thread {
 				// 썸네일,승리 ,캐시,골드,닉네임,레벨,길드
 				System.out.println("uid_보냄");
 				oos.flush();
-				state = 2;
+				state = NetState.READY;
+			}
+			break;
+			
+		case NetState.SHOP:
+			Shop();
+			break;		
+			
+		case NetState.STORY:
+			System.out.println("상태는 싱글!!");
+			String d = ois.readObject().toString();
+
+			mapLoader(1);
+
+			if (m_Singlemap != null) {
+				System.out.println(m_Singlemap);
+				sendMessage(m_Singlemap);
+				if (id.equals("go7072")) {
+					state = 10; // go7072면 맵 에디터로 이동
+				} // else
+
+				state = 10; // 7번이면 게임진행으로 이동
 			}
 
 			break;
-		case 2: // 클라이언트가 대기방 상태면 이쪽으로 들어간다.
+			
+		case NetState.READY:
+			
+			// 클라이언트가 대기방 상태면 이쪽으로 들어간다.
 			System.out.println("로비룸으로 접속");
 			String b = ois.readObject().toString();
 			if (b.equals("서치모드")) {
@@ -208,420 +231,10 @@ public class ClientThread extends Thread {
 				state=3;
 			}
 
-			break;
-		case 3: //상점모드
-			System.out.println("유저가 상점으로 들어옴");
-			String buymode = ois.readObject().toString();
-			String[] resultbuy=buymode.split(":");			
-			
-				if(resultbuy[0].equals("GOLD"))
-				{
-					switch(Integer.parseInt(resultbuy[1]))
-					{					
-					case UnitValue.F_ANNA:
-					
-						if(getLv(mycards.anna)==0)//처음 구매
-						{
-							
-							if(buyUnit(1000))
-							{
-							try {
-								this.mycards.anna="1"+"a0";
-								String sql =("update km_inven set anna="+"'"+this.mycards.anna+"'"+" where USER_UID="+user_uid);
-								DBManager.getInstance().stmt.executeUpdate(sql);
-							} catch (SQLException e1) {
-								// TODO Auto-generated catch block
-								e1.printStackTrace();
-							}
-							this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.anna+":"+UnitValue.F_ANNA);	
-							
-							}
-						}
-						else //업글시 호출되는 가격 계산식
-						{
-							if(buyUnit(getLv(mycards.anna)*500))
-							{
-								try {															
-									this.mycards.anna=(getLv(mycards.anna)+1)+"a0";
-									DBManager.getInstance().stmt.executeUpdate("update km_inven set anna="+"'"+this.mycards.anna+"'"+" where USER_UID="+user_uid);
-									//call=null;
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.anna+":"+UnitValue.F_ANNA);									}
-													
-						}
-						break;
-						
-						
-						
-						
-						
-						//매직 타워 부분이다.
-					case UnitValue.F_ELSATOWER:
-						if(getLv(mycards.magictower)==0) //처음 구매시
-						{
-							if(buyUnit(3500))
-							{
-								try {
-									this.mycards.magictower="1"+"a0";
-									String sql =("update km_inven set magictower="+"'"+this.mycards.magictower+"'"+" where USER_UID="+user_uid);
-									DBManager.getInstance().stmt.executeUpdate(sql);
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.magictower+":"+UnitValue.F_ELSATOWER);		
-							}
-
-						}
-						else  //업그레이드 시도시
-						{
-							if(buyUnit(getLv(mycards.magictower)*1100))
-							{
-								try {															
-									this.mycards.magictower=(getLv(mycards.magictower)+1)+"a0";								
-									DBManager.getInstance().stmt.executeUpdate("update km_inven set magictower="+"'"+this.mycards.magictower+"'"+" where USER_UID="+user_uid);
-									//call=null;
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.magictower+":"+UnitValue.F_ELSATOWER);	
-							}
-						}
-						break;
-						
-						
-						
-						
-						// 점핑트랩
-					case UnitValue.F_JUMPINGTRAP:
-						if(getLv(mycards.jumping)==0)
-						{							
-							if(buyUnit(200))
-							{
-								try {
-									this.mycards.jumping="1"+"a0";
-									String sql =("update km_inven set jumping="+"'"+this.mycards.jumping+"'"+" where USER_UID="+user_uid);
-									DBManager.getInstance().stmt.executeUpdate(sql);
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.jumping+UnitValue.F_JUMPINGTRAP);	
-							}
-						}
-						else
-						{
-							if(buyUnit(getLv(mycards.jumping)*20))
-							{
-								try {															
-									this.mycards.jumping=(getLv(mycards.jumping)+1)+"a0";
-									DBManager.getInstance().stmt.executeUpdate("update km_inven set jumping="+"'"+this.mycards.jumping+"'"+" where USER_UID="+user_uid);
-									//call=null;
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.jumping+":"+UnitValue.F_JUMPINGTRAP);	
-							}
-						}						
-						break;
-						
-						
-						
-						
-						
-						
-						
-						
-					case UnitValue.F_BOOM:
-						if(getLv(mycards.boom)==0)
-						{							
-							if(buyUnit(300))
-							{
-								try {
-									this.mycards.boom="1"+"a0";
-									String sql =("update km_inven set boom="+"'"+this.mycards.boom+"'"+" where USER_UID="+user_uid);
-									DBManager.getInstance().stmt.executeUpdate(sql);
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.boom+":"+UnitValue.F_BOOM);	
-							}
-						}
-						else
-						{
-							if(buyUnit(getLv(mycards.boom)*20))
-							{
-								try {															
-									this.mycards.boom=(getLv(mycards.boom)+1)+"a0";
-									DBManager.getInstance().stmt.executeUpdate("update km_inven set boom="+"'"+this.mycards.boom+"'"+" where USER_UID="+user_uid);
-									//call=null;
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.boom+":"+UnitValue.F_BOOM);	
-							}
-						}
-						break;
-						
-						
-						
-						
-						
-						
-						
-					case UnitValue.F_MAGICAIN:
-						if(getLv(mycards.maigician)==0)
-						{
-							if(buyUnit(2500))
-							{
-								try {
-									this.mycards.maigician="1"+"a0";
-									String sql =("update km_inven set magician="+"'"+this.mycards.maigician+"'"+" where USER_UID="+user_uid);
-									DBManager.getInstance().stmt.executeUpdate(sql);
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.maigician+":"+UnitValue.F_MAGICAIN);	
-							}
-
-						}
-						else
-						{
-							if(buyUnit(getLv(mycards.maigician)*1200))
-							{
-								try {															
-									this.mycards.maigician=(getLv(mycards.maigician)+1)+"a0";
-									DBManager.getInstance().stmt.executeUpdate("update km_inven set magician="+"'"+this.mycards.maigician+"'"+" where USER_UID="+user_uid);
-									//call=null;
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.maigician+":"+UnitValue.F_MAGICAIN);	
-							}
-						}
-						break;
-					case UnitValue.F_ARCHER:
-						if(getLv(mycards.archer)==0)
-						{
-							if(buyUnit(200))
-							{
-								try {
-									this.mycards.archer="1"+"a0";
-									String sql =("update km_inven set archer="+"'"+this.mycards.archer+"'"+" where USER_UID="+user_uid);
-									DBManager.getInstance().stmt.executeUpdate(sql);
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.archer+":"+UnitValue.F_ARCHER);		
-							}
-						}
-						else
-						{
-							if(buyUnit(getLv(mycards.archer)*80))
-							{
-								try {															
-									this.mycards.archer=(getLv(mycards.archer)+1)+"a0";
-									DBManager.getInstance().stmt.executeUpdate("update km_inven set archer="+"'"+this.mycards.archer+"'"+" where USER_UID="+user_uid);
-									//call=null;
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.archer+":"+UnitValue.F_ARCHER);	
-							}
-						
-						}
-						break;
-					case UnitValue.F_TOWER:
-						if(getLv(mycards.archertower)==0)
-						{
-							if(buyUnit(500))
-							{
-								try {
-									this.mycards.archertower="1"+"a0";
-									String sql =("update km_inven set archertower="+"'"+this.mycards.archertower+"'"+" where USER_UID="+user_uid);
-									DBManager.getInstance().stmt.executeUpdate(sql);
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.archertower+":"+UnitValue.F_TOWER);	
-							}
-						}
-						else
-						{
-							if(buyUnit(getLv(mycards.archertower)*120))
-							{
-								try {															
-									this.mycards.archertower=(getLv(mycards.archertower)+1)+"a0";
-									DBManager.getInstance().stmt.executeUpdate("update km_inven set archertower="+"'"+this.mycards.archertower+"'"+" where USER_UID="+user_uid);
-									//call=null;
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.archertower+":"+UnitValue.F_TOWER);	
-							}
-						
-	
-						}
-						break;
-					case UnitValue.F_WORRIOR:
-						if(getLv(mycards.worrior)==0)
-						{
-							if(buyUnit(150))
-							{
-								try {
-									this.mycards.worrior="1"+"a0";
-									String sql =("update km_inven set worrior="+"'"+this.mycards.worrior+"'"+" where USER_UID="+user_uid);
-									DBManager.getInstance().stmt.executeUpdate(sql);
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.worrior+":"+UnitValue.F_WORRIOR);	
-							}
-						}
-						else
-						{
-							if(buyUnit(getLv(mycards.worrior)*60))							
-							{
-								try {															
-									this.mycards.worrior=(getLv(mycards.worrior)+1)+"a0";
-									DBManager.getInstance().stmt.executeUpdate("update km_inven set worrior="+"'"+this.mycards.worrior+"'"+" where USER_UID="+user_uid);
-									//call=null;
-								} catch (SQLException e1) {
-									// TODO Auto-generated catch block
-									e1.printStackTrace();
-								}
-								this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.worrior+":"+UnitValue.F_WORRIOR);	
-							}
-						}
-						break;					
-					}
-				}
-				else if(resultbuy[0].equals("활성화"))
-				{
-					int unit_type=5;
-					int unit_state=5;
-					int unit_level=0;
-					try
-					{
-				    unit_type=Integer.parseInt(resultbuy[1]);
-					unit_state=Integer.parseInt(resultbuy[2]);
-					unit_level=Integer.parseInt(resultbuy[3]);
-					}
-					catch(NumberFormatException e)
-					{
-						
-					}
-					
-					if(unit_state==0)
-					{
-						if(unit_level>0)
-						{
-						unit_state=1;						
-						this.sendMessage("3:"+unit_type+":"+unit_state);
-						try {
-							Unit_active(unit_type, unit_state);
-						} catch (SQLException e1) {
-							// TODO Auto-generated catch block
-							e1.printStackTrace();
-						}
-						System.out.println("유닛활성화 시킵니다.");
-						}
-						return;
-					}
-					else
-					{
-						if(unit_level>0)
-						{
-						unit_state=0;					
-						this.sendMessage("3:"+unit_type+":"+unit_state);
-						try {
-							Unit_active(unit_type, unit_state);
-						} catch (SQLException e1) {
-							// TODO Auto-generated catch block
-							e1.printStackTrace();
-						}
-						System.out.println("유닛을 비활성화 시킵니다.");
-						}
-						return;
-					}
-					
-					
-				}
-				else if(resultbuy[0].equals("CASH"))
-				{
-					
-					System.out.println("유닛활성화를 시도합니다");
-				}			
-				else if(resultbuy[0].equals("EXIT"))
-				{
-					state=2;
-				}
-			
-			
-			
 			
 			break;
-
-		case 4:// 스토리모드에서 게임을 불러오는 상태가 되면 4번을 불러온다.
-			System.out.println("상태는 멀티!!");
-			String c = ois.readObject().toString();
-
-			if (c.equals("1")) {
-				System.out.println("1번맵을 불러옵니다");
-				mapLoader(1);
-			}
-
-			state = 11;
-
-			break;
-		case 5: // 맵 저장 할꺼라는 메시지가 넘어왔다면
-
-			break;
-		case 6: // 맵 정보를 저장
-			String e = null;
-			e = ois.readObject().toString();
-			System.out.println("맵정보 불러옴");
-			System.out.println(e);
-			mapSetting(e);
-			if (e != null) {
-				state = 2; // 다시 로비 대기 상태로 변경한다.
-				m_Singlemap = null;
-			}
-
-			break;
-		case 7:
-			// sendMessage("동기화시작");
-
-			String stringFrame = ois.readObject().toString();
-
-			String[] result = stringFrame.split(":");
-			System.out.println("" + stringFrame);
-			String checkSum = result[0];
-			myFrameCount = Integer.parseInt(result[1]);
-			// System.out.println(""+checkSum);
-			if (!result[2].equals("null")) {
-				clientAct = result[2];
-				// System.out.println(""+clientAct);
-			}
-
-			state = 8;
-
-			break;
-		case 8: //게임모드로 들어간상태
+			
+		case NetState.MULTIGAMESTART:
 			String sendPacket = null;
 			// System.out.println(""+id+"의 프레임카운터");
 			if (myFrameCount == other.myFrameCount) {
@@ -655,34 +268,38 @@ public class ClientThread extends Thread {
 				System.out.println("기다리고있는거 안보이냐 빨리이동헤 ,,");
 				// other.sendMessage("nextFrame:"+null);
 			}
-			state = 7;
+			state=NetState.MULTIGAME;
+
 			break;
+			
+		case NetState.MULTIGAME:
+			String stringFrame = ois.readObject().toString();
 
-		case 9:// 싱글모드
-			System.out.println("상태는 싱글!!");
-			String d = ois.readObject().toString();
-
-			mapLoader(1);
-
-			if (m_Singlemap != null) {
-				System.out.println(m_Singlemap);
-				sendMessage(m_Singlemap);
-				if (id.equals("go7072")) {
-					state = 10; // go7072면 맵 에디터로 이동
-				} // else
-
-				state = 10; // 7번이면 게임진행으로 이동
-
+			String[] result = stringFrame.split(":");
+			System.out.println("" + stringFrame);
+			String checkSum = result[0];
+			myFrameCount = Integer.parseInt(result[1]);
+			// System.out.println(""+checkSum);
+			if (!result[2].equals("null")) {
+				clientAct = result[2];
+				// System.out.println(""+clientAct);
 			}
 
 			break;
-
-		case 10: // 싱글모드
-
-			state = 2;
+			
+		case NetState.MAPEDIT:
+			String e = null;
+			e = ois.readObject().toString();
+			System.out.println("맵정보 불러옴");
+			System.out.println(e);
+			mapSetting(e);
+			if (e != null) {
+				state = NetState.ROBBY; // 다시 로비 대기 상태로 변경한다.
+				m_Singlemap = null;
+			}
 
 			break;
-		case 11:
+		case NetState.MUTI_TRUN_READY:
 			// 턴제 멀티 모드
 			String es = ois.readObject().toString();
 			System.out.println("dd" + es);
@@ -696,9 +313,8 @@ public class ClientThread extends Thread {
 			if (es.equals("패배")) {
 				state = 2;
 			}
-
 			break;
-		case 12:
+		case NetState.MUTI_TRUN:
 			// 턴제 멀티게임 2번째 상태
 
 			String StringGameData = ois.readObject().toString();
@@ -723,14 +339,389 @@ public class ClientThread extends Thread {
 			// myFrameCount=Integer.parseInt(result[1]);
 			// System.out.println(""+checkSum);
 
+			
 			break;
-		default:
-			DBManager.removeClient(this);
-			break;
+			default:
+				DBManager.removeClient(this);
+				break;
+	
+		}		
+		
+		
+		
+		
+		
 
-		}
+		
 	}
 	
+	
+	public void Shop() throws IOException, ClassNotFoundException
+	{
+		System.out.println("유저가 상점으로 들어옴");
+		String buymode = ois.readObject().toString();
+		String[] resultbuy=buymode.split(":");			
+		
+			if(resultbuy[0].equals("GOLD"))
+			{
+				switch(Integer.parseInt(resultbuy[1]))
+				{					
+				case UnitValue.F_ANNA:
+				
+					if(getLv(mycards.anna)==0)//처음 구매
+					{
+						
+						if(buyUnit(1000))
+						{
+						try {
+							this.mycards.anna="1"+"a0";
+							String sql =("update km_inven set anna="+"'"+this.mycards.anna+"'"+" where USER_UID="+user_uid);
+							DBManager.getInstance().stmt.executeUpdate(sql);
+						} catch (SQLException e1) {
+							// TODO Auto-generated catch block
+							e1.printStackTrace();
+						}
+						this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.anna+":"+UnitValue.F_ANNA);	
+						
+						}
+					}
+					else //업글시 호출되는 가격 계산식
+					{
+						if(buyUnit(getLv(mycards.anna)*500))
+						{
+							try {															
+								this.mycards.anna=(getLv(mycards.anna)+1)+"a0";
+								DBManager.getInstance().stmt.executeUpdate("update km_inven set anna="+"'"+this.mycards.anna+"'"+" where USER_UID="+user_uid);
+								//call=null;
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.anna+":"+UnitValue.F_ANNA);									}
+												
+					}
+					break;
+					
+					
+					
+					
+					
+					//매직 타워 부분이다.
+				case UnitValue.F_ELSATOWER:
+					if(getLv(mycards.magictower)==0) //처음 구매시
+					{
+						if(buyUnit(3500))
+						{
+							try {
+								this.mycards.magictower="1"+"a0";
+								String sql =("update km_inven set magictower="+"'"+this.mycards.magictower+"'"+" where USER_UID="+user_uid);
+								DBManager.getInstance().stmt.executeUpdate(sql);
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.magictower+":"+UnitValue.F_ELSATOWER);		
+						}
+
+					}
+					else  //업그레이드 시도시
+					{
+						if(buyUnit(getLv(mycards.magictower)*1100))
+						{
+							try {															
+								this.mycards.magictower=(getLv(mycards.magictower)+1)+"a0";								
+								DBManager.getInstance().stmt.executeUpdate("update km_inven set magictower="+"'"+this.mycards.magictower+"'"+" where USER_UID="+user_uid);
+								//call=null;
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.magictower+":"+UnitValue.F_ELSATOWER);	
+						}
+					}
+					break;
+					
+					
+					
+					
+					// 점핑트랩
+				case UnitValue.F_JUMPINGTRAP:
+					if(getLv(mycards.jumping)==0)
+					{							
+						if(buyUnit(200))
+						{
+							try {
+								this.mycards.jumping="1"+"a0";
+								String sql =("update km_inven set jumping="+"'"+this.mycards.jumping+"'"+" where USER_UID="+user_uid);
+								DBManager.getInstance().stmt.executeUpdate(sql);
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.jumping+UnitValue.F_JUMPINGTRAP);	
+						}
+					}
+					else
+					{
+						if(buyUnit(getLv(mycards.jumping)*20))
+						{
+							try {															
+								this.mycards.jumping=(getLv(mycards.jumping)+1)+"a0";
+								DBManager.getInstance().stmt.executeUpdate("update km_inven set jumping="+"'"+this.mycards.jumping+"'"+" where USER_UID="+user_uid);
+								//call=null;
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.jumping+":"+UnitValue.F_JUMPINGTRAP);	
+						}
+					}						
+					break;
+					
+					
+					
+					
+					
+					
+					
+					
+				case UnitValue.F_BOOM:
+					if(getLv(mycards.boom)==0)
+					{							
+						if(buyUnit(300))
+						{
+							try {
+								this.mycards.boom="1"+"a0";
+								String sql =("update km_inven set boom="+"'"+this.mycards.boom+"'"+" where USER_UID="+user_uid);
+								DBManager.getInstance().stmt.executeUpdate(sql);
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.boom+":"+UnitValue.F_BOOM);	
+						}
+					}
+					else
+					{
+						if(buyUnit(getLv(mycards.boom)*20))
+						{
+							try {															
+								this.mycards.boom=(getLv(mycards.boom)+1)+"a0";
+								DBManager.getInstance().stmt.executeUpdate("update km_inven set boom="+"'"+this.mycards.boom+"'"+" where USER_UID="+user_uid);
+								//call=null;
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.boom+":"+UnitValue.F_BOOM);	
+						}
+					}
+					break;
+					
+					
+					
+					
+					
+					
+					
+				case UnitValue.F_MAGICAIN:
+					if(getLv(mycards.maigician)==0)
+					{
+						if(buyUnit(2500))
+						{
+							try {
+								this.mycards.maigician="1"+"a0";
+								String sql =("update km_inven set magician="+"'"+this.mycards.maigician+"'"+" where USER_UID="+user_uid);
+								DBManager.getInstance().stmt.executeUpdate(sql);
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.maigician+":"+UnitValue.F_MAGICAIN);	
+						}
+
+					}
+					else
+					{
+						if(buyUnit(getLv(mycards.maigician)*1200))
+						{
+							try {															
+								this.mycards.maigician=(getLv(mycards.maigician)+1)+"a0";
+								DBManager.getInstance().stmt.executeUpdate("update km_inven set magician="+"'"+this.mycards.maigician+"'"+" where USER_UID="+user_uid);
+								//call=null;
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.maigician+":"+UnitValue.F_MAGICAIN);	
+						}
+					}
+					break;
+				case UnitValue.F_ARCHER:
+					if(getLv(mycards.archer)==0)
+					{
+						if(buyUnit(200))
+						{
+							try {
+								this.mycards.archer="1"+"a0";
+								String sql =("update km_inven set archer="+"'"+this.mycards.archer+"'"+" where USER_UID="+user_uid);
+								DBManager.getInstance().stmt.executeUpdate(sql);
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.archer+":"+UnitValue.F_ARCHER);		
+						}
+					}
+					else
+					{
+						if(buyUnit(getLv(mycards.archer)*80))
+						{
+							try {															
+								this.mycards.archer=(getLv(mycards.archer)+1)+"a0";
+								DBManager.getInstance().stmt.executeUpdate("update km_inven set archer="+"'"+this.mycards.archer+"'"+" where USER_UID="+user_uid);
+								//call=null;
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.archer+":"+UnitValue.F_ARCHER);	
+						}
+					
+					}
+					break;
+				case UnitValue.F_TOWER:
+					if(getLv(mycards.archertower)==0)
+					{
+						if(buyUnit(500))
+						{
+							try {
+								this.mycards.archertower="1"+"a0";
+								String sql =("update km_inven set archertower="+"'"+this.mycards.archertower+"'"+" where USER_UID="+user_uid);
+								DBManager.getInstance().stmt.executeUpdate(sql);
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.archertower+":"+UnitValue.F_TOWER);	
+						}
+					}
+					else
+					{
+						if(buyUnit(getLv(mycards.archertower)*120))
+						{
+							try {															
+								this.mycards.archertower=(getLv(mycards.archertower)+1)+"a0";
+								DBManager.getInstance().stmt.executeUpdate("update km_inven set archertower="+"'"+this.mycards.archertower+"'"+" where USER_UID="+user_uid);
+								//call=null;
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.archertower+":"+UnitValue.F_TOWER);	
+						}
+					
+
+					}
+					break;
+				case UnitValue.F_WORRIOR:
+					if(getLv(mycards.worrior)==0)
+					{
+						if(buyUnit(150))
+						{
+							try {
+								this.mycards.worrior="1"+"a0";
+								String sql =("update km_inven set worrior="+"'"+this.mycards.worrior+"'"+" where USER_UID="+user_uid);
+								DBManager.getInstance().stmt.executeUpdate(sql);
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:구매성공:"+this.gold+":"+this.cash+":"+this.mycards.worrior+":"+UnitValue.F_WORRIOR);	
+						}
+					}
+					else
+					{
+						if(buyUnit(getLv(mycards.worrior)*60))							
+						{
+							try {															
+								this.mycards.worrior=(getLv(mycards.worrior)+1)+"a0";
+								DBManager.getInstance().stmt.executeUpdate("update km_inven set worrior="+"'"+this.mycards.worrior+"'"+" where USER_UID="+user_uid);
+								//call=null;
+							} catch (SQLException e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							this.sendMessage("1:업글성공:"+this.gold+":"+this.cash+":"+this.mycards.worrior+":"+UnitValue.F_WORRIOR);	
+						}
+					}
+					break;					
+				}
+			}
+			else if(resultbuy[0].equals("활성화"))
+			{
+				int unit_type=5;
+				int unit_state=5;
+				int unit_level=0;
+				try
+				{
+			    unit_type=Integer.parseInt(resultbuy[1]);
+				unit_state=Integer.parseInt(resultbuy[2]);
+				unit_level=Integer.parseInt(resultbuy[3]);
+				}
+				catch(NumberFormatException e)
+				{
+					
+				}
+				
+				if(unit_state==0)
+				{
+					if(unit_level>0)
+					{
+					unit_state=1;						
+					this.sendMessage("3:"+unit_type+":"+unit_state);
+					try {
+						Unit_active(unit_type, unit_state);
+					} catch (SQLException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}
+					System.out.println("유닛활성화 시킵니다.");
+					}
+					return;
+				}
+				else
+				{
+					if(unit_level>0)
+					{
+					unit_state=0;					
+					this.sendMessage("3:"+unit_type+":"+unit_state);
+					try {
+						Unit_active(unit_type, unit_state);
+					} catch (SQLException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}
+					System.out.println("유닛을 비활성화 시킵니다.");
+					}
+					return;
+				}
+				
+				
+			}
+			else if(resultbuy[0].equals("CASH"))
+			{
+				
+				System.out.println("유닛활성화를 시도합니다");
+			}			
+			else if(resultbuy[0].equals("EXIT"))
+			{
+				state=2;
+			}
+		
+		
+		
+	}
 	public void Unit_active(int type,int state) throws SQLException
 	{
 		String sql;
@@ -907,3 +898,4 @@ public class ClientThread extends Thread {
 		return "[client " + number + "]";
 	}
 }
+
